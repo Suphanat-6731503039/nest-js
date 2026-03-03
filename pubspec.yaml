@@ -37,6 +37,7 @@ dependencies:
   flutter_riverpod: ^2.4.9
 
   url_launcher: ^6.3.2
+  firebase_core: ^4.4.0
 
 
 

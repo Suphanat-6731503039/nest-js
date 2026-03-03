@@ -5,72 +5,97 @@ import '../core/services/providers/filter_provider.dart';
 class FilterScreen extends ConsumerWidget {
   const FilterScreen({super.key});
 
-  // รายการตัวเลือกทั้งหมด (อิงจาก Mock Data ที่เราสร้างไว้)
-  final List<String> availableAmenities = const [
-    '7-Eleven',
-    'Cafe Amazon',
-    'Clean Restroom',
-    'Inthanin Coffee',
-    'Mini Big C',
-    'Deli Cafe'
-  ];
-  final List<String> availableFuelTypes = const [
-    'Gasohol 91',
-    'Gasohol 95',
-    'E20',
-    'E85',
-    'Diesel',
-    'V-Power Gasohol 95',
-    'V-Power Diesel'
-  ];
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // อ่านค่า State ปัจจุบันจาก Provider
+    // ดึง State และ Notifier มาใช้งาน
     final filterState = ref.watch(filterProvider);
     final filterNotifier = ref.read(filterProvider.notifier);
 
+    // 🟢 แก้ไขคำให้ตรงกับใน mockGasStations แบบเป๊ะๆ!
+    final availableAmenities = [
+      '7-Eleven',
+      'Cafe Amazon',
+      'Punthai Coffee',
+      'Inthanin Coffee',
+      'MaxMart',
+      'Mini Big C',
+      'ห้องน้ำสะอาด',
+      'ร้านอาหาร',
+      'ร้านของชำ'
+    ];
+
+    final availableFuels = [
+      'แก๊สโซฮอล์ 95',
+      'แก๊สโซฮอล์ 91',
+      'E20',
+      'ดีเซล',
+      'EV Charging',
+      'LPG'
+    ];
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('กรองการค้นหา'),
+        title: const Text('กรองข้อมูลปั๊มน้ำมัน'),
         backgroundColor: Colors.blueAccent,
         foregroundColor: Colors.white,
         actions: [
           TextButton(
-            onPressed: () => filterNotifier.clearFilters(),
-            child: const Text('ล้างค่า',
-                style: TextStyle(color: Colors.white, fontSize: 16)),
-          )
+            onPressed: () {
+              filterNotifier.clearFilters();
+            },
+            child: const Text('ล้างทั้งหมด',
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
         ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
-          const Text('สิ่งอำนวยความสะดวก',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text(
+            'สิ่งอำนวยความสะดวก',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 10),
-          ...availableAmenities.map((amenity) {
-            return CheckboxListTile(
-              title: Text(amenity),
-              value: filterState.selectedAmenities.contains(amenity),
-              onChanged: (bool? value) {
-                filterNotifier.toggleAmenity(amenity);
-              },
-            );
-          }),
+          Wrap(
+            spacing: 8.0,
+            runSpacing: 4.0,
+            children: availableAmenities.map((amenity) {
+              final isSelected =
+                  filterState.selectedAmenities.contains(amenity);
+              return FilterChip(
+                label: Text(amenity),
+                selected: isSelected,
+                selectedColor: Colors.blue[100],
+                checkmarkColor: Colors.blue,
+                onSelected: (_) {
+                  filterNotifier.toggleAmenity(amenity);
+                },
+              );
+            }).toList(),
+          ),
           const Divider(height: 40),
-          const Text('ประเภทน้ำมัน',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text(
+            'ประเภทน้ำมัน / พลังงาน',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 10),
-          ...availableFuelTypes.map((fuel) {
-            return CheckboxListTile(
-              title: Text(fuel),
-              value: filterState.selectedFuelTypes.contains(fuel),
-              onChanged: (bool? value) {
-                filterNotifier.toggleFuelType(fuel);
-              },
-            );
-          }),
+          Wrap(
+            spacing: 8.0,
+            runSpacing: 4.0,
+            children: availableFuels.map((fuel) {
+              final isSelected = filterState.selectedFuelTypes.contains(fuel);
+              return FilterChip(
+                label: Text(fuel),
+                selected: isSelected,
+                selectedColor: Colors.green[100],
+                checkmarkColor: Colors.green,
+                onSelected: (_) {
+                  filterNotifier.toggleFuelType(fuel);
+                },
+              );
+            }).toList(),
+          ),
         ],
       ),
     );

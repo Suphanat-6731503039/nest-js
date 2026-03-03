@@ -23,6 +23,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   // 🟢 1. ตั้งพิกัดเริ่มต้นเป็นประเทศไทย (กลางประเทศ)
   LatLng _currentPosition = const LatLng(15.8700, 100.9925);
   bool _isLoadingLocation = true;
+  String? _selectedDistrict; // เก็บอำเภอที่เลือก
 
   @override
   void initState() {
@@ -119,15 +120,81 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   @override
   Widget build(BuildContext context) {
     final filterState = ref.watch(filterProvider);
-    final filteredStations = mockGasStations.where((station) {
-      bool matchAmenity = filterState.selectedAmenities.isEmpty ||
-          filterState.selectedAmenities
-              .every((a) => station.amenities.contains(a));
-      bool matchFuel = filterState.selectedFuelTypes.isEmpty ||
-          filterState.selectedFuelTypes
-              .every((f) => station.fuelTypes.contains(f));
-      return matchAmenity && matchFuel;
-    }).toList();
+
+    // 🟢 กำหนดให้แสดงปั้มทั้งหมด หรือกรองตามเงื่อนไข
+    List<GasStation> displayStations;
+
+    if (_selectedDistrict != null) {
+      // ถ้าเลือกอำเภอ ให้แสดงเฉพาะปั้มในอำเภอนั้น
+      displayStations = mockGasStations
+          .where((station) => station.district == _selectedDistrict)
+          .toList();
+    } else if (filterState.selectedAmenities.isEmpty &&
+        filterState.selectedFuelTypes.isEmpty) {
+      // ถ้าไม่มี filter เลือก ให้แสดงปั้มทั้งหมด
+      displayStations = mockGasStations;
+    } else {
+      // ถ้ามี filter เลือก ให้แสดงปั้มที่มี amenity หรือ fuel type ที่เลือก
+      displayStations = mockGasStations.where((station) {
+        bool matchAmenity = filterState.selectedAmenities.isEmpty ||
+            filterState.selectedAmenities
+                .any((a) => station.amenities.contains(a));
+        bool matchFuel = filterState.selectedFuelTypes.isEmpty ||
+            filterState.selectedFuelTypes
+                .any((f) => station.fuelTypes.contains(f));
+        return matchAmenity && matchFuel;
+      }).toList();
+    }
+
+    // Debug: แสดงจำนวนสถานีบริบูรณ์ที่จะแสดง
+    print('Total mockGasStations: ${mockGasStations.length}');
+    print('Display stations: ${displayStations.length}');
+
+    // 🟢 ฟังก์ชันสำหรับสร้างโลโก้แบรนด์
+    Widget _buildBrandLogo(String brand) {
+      // กำหนดสีตามแบรนด์
+      late Color logoColor;
+
+      switch (brand.toUpperCase()) {
+        case 'PTT':
+          logoColor = Colors.amber;
+          break;
+        case 'BANGCHAK':
+          logoColor = Colors.orange;
+          break;
+        case 'SHELL':
+          logoColor = Colors.yellow;
+          break;
+        default:
+          logoColor = Colors.red;
+      }
+
+      return Container(
+        decoration: BoxDecoration(
+          color: logoColor,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: CircleAvatar(
+          backgroundColor: logoColor,
+          radius: 20,
+          child: Text(
+            brand.isNotEmpty ? brand[0].toUpperCase() : '?',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -158,45 +225,118 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       builder: (context) => const SettingsScreen()))),
         ],
       ),
-      body: Stack(
+      body: Column(
         children: [
-          FlutterMap(
-            mapController: _mapController,
-            // 🟢 ตั้งค่าเริ่มต้นให้เห็นภาพกว้างของประเทศไทย
-            options:
-                MapOptions(initialCenter: _currentPosition, initialZoom: 6.0),
-            children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                // 🔴 แก้ปัญหา Error 403: ใส่ชื่อแพ็กเกจที่ไม่ซ้ำใครเพื่อระบุตัวตนกับ OSM
-                userAgentPackageName: 'com.fuelnear.thailand.navigation',
-              ),
-              MarkerLayer(
-                markers: [
-                  Marker(
-                      point: _currentPosition,
-                      width: 50,
-                      height: 50,
-                      child: const Icon(Icons.my_location,
-                          color: Colors.blue, size: 40)),
-                  ...filteredStations
-                      .map((station) => Marker(
-                            point: station.location,
-                            width: 50,
-                            height: 50,
-                            child: GestureDetector(
-                              onTap: () => _showStationDetails(station),
-                              child: const Icon(Icons.local_gas_station,
-                                  color: Colors.red, size: 40),
+          // 🟢 ปุ่มเลือกอำเภอ (สร้างรายการจาก mockGasStations)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  ...({
+                    // ใช้ Set เพื่อเอาแต่ชื่ออำเภอที่ไม่ซ้ำ
+                    for (var s in mockGasStations) s.district
+                  }.toList()
+                        ..sort())
+                      .map((district) => Padding(
+                            padding: const EdgeInsets.only(right: 8.0),
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _selectedDistrict == district
+                                    ? Colors.blueAccent
+                                    : Colors.grey[300],
+                                foregroundColor: _selectedDistrict == district
+                                    ? Colors.white
+                                    : Colors.black,
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _selectedDistrict =
+                                      _selectedDistrict == district
+                                          ? null
+                                          : district;
+                                });
+                                // ถ้ามีย่านที่ระบุ ก็ซูมคร่าว ๆ ไปตำแหน่งปั๊มแรกในอำเภอ
+                                if (_selectedDistrict != null) {
+                                  final first = mockGasStations.firstWhere(
+                                      (s) => s.district == _selectedDistrict);
+                                  _mapController.move(first.location, 13.0);
+                                } else {
+                                  _mapController.move(_currentPosition, 6.0);
+                                }
+                              },
+                              child: Text(district),
                             ),
                           ))
                       .toList(),
+                  if (_selectedDistrict != null)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8.0),
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.clear),
+                        label: const Text('ยกเลิก'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red[400],
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _selectedDistrict = null;
+                          });
+                          _mapController.move(_currentPosition, 6.0);
+                        },
+                      ),
+                    ),
                 ],
               ),
-            ],
+            ),
           ),
-          if (_isLoadingLocation)
-            const Center(child: CircularProgressIndicator()),
+          // 🟢 แผนที่
+          Expanded(
+            child: Stack(
+              children: [
+                FlutterMap(
+                  mapController: _mapController,
+                  // 🟢 ตั้งค่าเริ่มต้นให้เห็นภาพกว้างของเชียงราย
+                  options: MapOptions(
+                      initialCenter: const LatLng(20.0, 100.2),
+                      initialZoom: 9.0),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      // 🔴 แก้ปัญหา Error 403: ใส่ชื่อแพ็กเกจที่ไม่ซ้ำใครเพื่อระบุตัวตนกับ OSM
+                      userAgentPackageName: 'com.fuelnear.thailand.navigation',
+                    ),
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                            point: _currentPosition,
+                            width: 50,
+                            height: 50,
+                            child: const Icon(Icons.my_location,
+                                color: Colors.blue, size: 40)),
+                        ...displayStations
+                            .map((station) => Marker(
+                                  point: station.location,
+                                  width: 60,
+                                  height: 60,
+                                  child: GestureDetector(
+                                    onTap: () => _showStationDetails(station),
+                                    child: _buildBrandLogo(station.brand),
+                                  ),
+                                ))
+                            .toList(),
+                      ],
+                    ),
+                  ],
+                ),
+                if (_isLoadingLocation)
+                  const Center(child: CircularProgressIndicator()),
+              ],
+            ),
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
